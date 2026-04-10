@@ -42,6 +42,10 @@ The instrumentation supports the following configuration options:
   the end of each job execution. This is recommended for job systems that fork
   worker processes, such as Resque.
   - Default: `false`
+- **enable_performance_metrics:** If enabled, process spans include job
+  execution performance attributes for allocations, CPU time, idle time, and GC
+  time.
+  - Default: `false`
 - **propagation_style:** Controls how job execution traces are related to the
   trace where the job was enqueued.
   - `:link` – The job runs in a separate trace, with its initial span linked to
@@ -87,6 +91,15 @@ Attributes that are specific to this instrumentation are recorded under `messagi
 | `messaging.active_job.adapter.name` | String | The name of the `ActiveJob` adapter implementation |
 | `messaging.active_job.message.priority` | String | Present when set by the client from `ActiveJob#priority` |
 | `messaging.active_job.message.provider_job_id` | String | Present if the underlying adapter has backend specific message ids |
+
+When `enable_performance_metrics` is enabled, process spans also include:
+
+| Attribute Name | Type | Notes |
+| - | - | - |
+| `messaging.active_job.job.allocations` | Number | Object allocations during job execution |
+| `messaging.active_job.job.cpu_time` | Number | CPU time during job execution, in milliseconds |
+| `messaging.active_job.job.idle_time` | Number | Wall-clock time minus CPU time during job execution, in milliseconds |
+| `messaging.active_job.job.gc_time` | Number | GC time during job execution, in milliseconds |
 
 ## Differences between ActiveJob versions
 
