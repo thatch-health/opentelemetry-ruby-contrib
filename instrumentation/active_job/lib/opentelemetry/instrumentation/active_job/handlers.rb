@@ -10,6 +10,7 @@ require_relative 'handlers/enqueue'
 require_relative 'handlers/perform'
 require_relative 'handlers/resume'
 require_relative 'handlers/step'
+require_relative 'handlers/step_skipped'
 
 module OpenTelemetry
   module Instrumentation
@@ -52,6 +53,7 @@ module OpenTelemetry
           perform_handler = Handlers::Perform.new(parent_span_provider, mapper, config)
           step_handler = Handlers::Step.new(parent_span_provider, mapper, config)
           resume_handler = Handlers::Resume.new(parent_span_provider)
+          step_skipped_handler = Handlers::StepSkipped.new(parent_span_provider)
 
           handlers_by_pattern = {
             'enqueue' => enqueue_handler,
@@ -61,7 +63,8 @@ module OpenTelemetry
             'retry_stopped' => default_handler,
             'discard' => default_handler,
             'step' => step_handler,
-            'resume' => resume_handler
+            'resume' => resume_handler,
+            'step_skipped' => step_skipped_handler
           }
 
           @subscriptions = handlers_by_pattern.map do |key, handler|
