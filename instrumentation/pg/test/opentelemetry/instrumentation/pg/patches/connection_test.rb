@@ -44,6 +44,24 @@ describe OpenTelemetry::Instrumentation::PG::Patches do
       end
     end
 
+    describe 'with db_response_returned_rows enabled' do
+      let(:config) { { db_response_returned_rows: true } }
+
+      %i[exec query sync_exec async_exec].each do |method|
+        describe "method #{method}" do
+          it 'responds with expected values when called with a block' do
+            values = client.send(method, 'SELECT * FROM (VALUES (1), (2)) AS t(id)') { |result| result.column_values(0) }
+            _(values).must_equal(%w[1 2])
+          end
+
+          it 'responds with expected values when called via dot syntax' do
+            values = client.send(method, 'SELECT * FROM (VALUES (1), (2)) AS t(id)').column_values(0)
+            _(values).must_equal(%w[1 2])
+          end
+        end
+      end
+    end
+
     %i[exec_params async_exec_params sync_exec_params].each do |method|
       describe "method #{method}" do
         it 'responds with expected values when called with a block' do

@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 require 'opentelemetry-helpers-sql-processor'
+require 'opentelemetry/semconv/incubating/db/attributes'
 require_relative '../constants'
 require_relative '../lru_cache'
 
@@ -79,7 +80,7 @@ module OpenTelemetry
           PG::Constants::EXEC_ISH_METHODS.each do |method|
             define_method method do |*args, &block|
               span_name, attrs = span_attrs(:query, *args)
-              tracer.in_span(span_name, attributes: attrs, kind: :client) do |_span, context|
+              tracer.in_span(span_name, attributes: attrs, kind: :client) do |span, context|
                 # Inject propagator context into SQL if propagator is configured
                 if propagator && args[0].is_a?(String)
                   sql = args[0]
@@ -93,10 +94,13 @@ module OpenTelemetry
                   end
                 end
 
+                result = super(*args)
+                set_db_response_returned_rows(span, result, attrs)
+
                 if block
-                  block.call(super(*args))
+                  block.call(result)
                 else
-                  super(*args)
+                  result
                 end
               end
             end
@@ -105,7 +109,7 @@ module OpenTelemetry
           PG::Constants::PREPARE_ISH_METHODS.each do |method|
             define_method method do |*args|
               span_name, attrs = span_attrs(:prepare, *args)
-              tracer.in_span(span_name, attributes: attrs, kind: :client) do |_span, context|
+              tracer.in_span(span_name, attributes: attrs, kind: :client) do |span, context|
                 # Inject propagator context into SQL if propagator is configured
                 # For prepare, the SQL is in args[1]
                 if propagator && args[1].is_a?(String)
@@ -120,7 +124,9 @@ module OpenTelemetry
                   end
                 end
 
-                super(*args)
+                result = super(*args)
+                set_db_response_returned_rows(span, result, attrs)
+                result
               end
             end
           end
@@ -128,11 +134,14 @@ module OpenTelemetry
           PG::Constants::EXEC_PREPARED_ISH_METHODS.each do |method|
             define_method method do |*args, &block|
               span_name, attrs = span_attrs(:execute, *args)
-              tracer.in_span(span_name, attributes: attrs, kind: :client) do
+              tracer.in_span(span_name, attributes: attrs, kind: :client) do |span|
+                result = super(*args)
+                set_db_response_returned_rows(span, result, attrs)
+
                 if block
-                  block.call(super(*args))
+                  block.call(result)
                 else
-                  super(*args)
+                  result
                 end
               end
             end
@@ -156,6 +165,17 @@ module OpenTelemetry
 
           def config
             PG::Instrumentation.instance.config
+          end
+
+          def set_db_response_returned_rows(span, result, attrs)
+            return unless config[:db_response_returned_rows]
+            # Preserve attributes supplied through PG.with_attributes.
+            return if attrs.key?(OpenTelemetry::SemConv::Incubating::DB::DB_RESPONSE_RETURNED_ROWS)
+            return unless result.respond_to?(:ntuples)
+
+            span.set_attribute(OpenTelemetry::SemConv::Incubating::DB::DB_RESPONSE_RETURNED_ROWS, result.ntuples)
+          rescue StandardError => e
+            OpenTelemetry.handle_error(message: 'Error setting db.response.returned_rows', exception: e)
           end
 
           def lru_cache
